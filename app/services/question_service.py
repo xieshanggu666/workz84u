@@ -154,7 +154,7 @@ def list_questions(db: Session, page: int = 1, page_size: int = 10,
         query = query.filter(Question.content.contains(keyword))
 
     total = query.count()
-    items = query.offset(page * page_size).limit(page_size).all()
+    items = query.offset((page - 1) * page_size).limit(page_size).all()
     return total, items
 
 

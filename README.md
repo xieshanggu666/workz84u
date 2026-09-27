@@ -1,6 +1,6 @@
 # 📝 在线考试与题库管理系统
 
-基于 **FastAPI + SQLAlchemy + SQLite** 的在线考试平台，支持题库管理、智能组卷、在线考试、自动评分、成绩统计与证书发放。
+基于 **FastAPI + Vue 3 + TypeScript** 的在线考试平台，支持题库管理、智能组卷、在线考试、自动评分、成绩统计与证书发放。
 
 ## ✨ 功能特性
 
@@ -35,29 +35,65 @@
 - 排名与百分位、排行榜
 - 通过考试自动生成证书
 
+## 🧱 技术栈
+
+| 端 | 技术 |
+|----|------|
+| 前端 | Vue 3（`<script setup>`）+ TypeScript + Vite + Vue Router + Pinia + Axios |
+| 后端 | FastAPI / SQLAlchemy 2.0 / Pydantic v2 / python-jose / bcrypt |
+| 数据库 | SQLite |
+
 ## 🚀 快速开始
 
 ### 环境要求
-- Python 3.10+
-- 依赖见 `requirements.txt`
 
-### 安装与启动
+- Python 3.10+
+- Node.js 18+（推荐 20+）
+
+### 1. 安装依赖
 
 ```bash
-# 1. 创建虚拟环境并安装依赖
+# 后端依赖
 python -m venv .venv
-.venv\Scripts\activate            # Windows
-# source .venv/bin/activate      # Linux/macOS
+# Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. 初始化数据库（含示例数据：4 用户、1 科目、6 知识点、24 题、1 场已发布考试）
-python scripts/init_db.py
-
-# 3. 启动服务
-uvicorn app.main:app --reload --port 8000
+# 根目录（concurrently）+ 前端依赖（一条命令会同时安装）
+npm install
+npm --prefix frontend install
 ```
 
-访问 http://127.0.0.1:8000
+### 2. 初始化数据库（首次运行）
+
+含示例数据：4 用户、1 科目、6 知识点、23 题、1 场已发布考试。
+
+```bash
+npm run init-db
+# 等价于：python scripts/init_db.py
+```
+
+### 3. 同时启动前后端（开发模式）
+
+```bash
+npm run dev
+```
+
+该命令通过 `concurrently` 同时启动：
+
+| 服务 | 地址 | 说明 |
+|------|------|------|
+| 后端 FastAPI | http://127.0.0.1:8000 | 开启 `--reload`，接口文档 `/docs` |
+| 前端 Vite | http://127.0.0.1:5173 | HMR 热更新，`/api` 自动代理到后端 |
+
+浏览器访问 **http://127.0.0.1:5173** 即可。
+
+也可以分别启动：
+
+```bash
+npm run dev:backend     # 仅后端 :8000
+npm run dev:frontend    # 仅前端 :5173
+```
 
 ### 示例账号
 
@@ -67,30 +103,53 @@ uvicorn app.main:app --reload --port 8000
 | 教师 | teacher | 123456 |
 | 学生 | student1 / student2 | 123456 |
 
+## 📦 生产部署
+
+```bash
+# 1. 构建前端（产物输出到 frontend/dist）
+npm run build
+
+# 2. 启动后端，FastAPI 会自动托管 frontend/dist 下的 SPA
+npm start
+# 等价于：python -m uvicorn app.main:app --port 8000
+```
+
+访问 http://127.0.0.1:8000 即为前端页面；非 API 路径统一回退到 `index.html`（支持前端路由刷新）。
+生产环境建议通过 Nginx 等反向代理并配置 HTTPS。
+
 ## 🧪 运行测试
 
 ```bash
-pytest tests/ -v
+npm test
+# 等价于：pytest tests/ -v
 ```
-
-测试覆盖：多选评分、超时判定、分页、排名统计、防作弊计数、智能组卷知识点覆盖。
 
 ## 📁 目录结构
 
 ```
 exam_system/
-├── app/
-│   ├── main.py              # 入口 + 页面路由
+├── app/                     # FastAPI 后端
+│   ├── main.py              # 入口（API 路由 + CORS + 生产环境 SPA 托管）
 │   ├── core/                # 配置 / 数据库 / 安全 / 依赖
 │   ├── models/              # SQLAlchemy 模型（10 张表）
 │   ├── schemas/             # Pydantic 校验
 │   ├── services/            # 业务逻辑（组卷 / 评分 / 统计 / 防作弊）
 │   ├── api/                 # REST 接口
 │   └── utils/
-├── templates/               # Jinja2 页面（登录/仪表盘/题库/考试/答题/成绩）
-├── static/                  # CSS / JS
+├── frontend/                # Vue 3 + TypeScript 前端
+│   ├── src/
+│   │   ├── api/             # Axios 封装与各模块接口
+│   │   ├── stores/          # Pinia（登录态）
+│   │   ├── router/          # Vue Router（含登录守卫）
+│   │   ├── layouts/         # 带顶部导航的布局
+│   │   ├── views/           # 登录/仪表盘/题库/考试/答题/结果/统计/证书
+│   │   ├── types/           # 全局 TS 类型
+│   │   └── styles/
+│   ├── vite.config.ts       # /api 代理到 127.0.0.1:8000
+│   └── package.json
 ├── scripts/init_db.py       # 初始化脚本
 ├── tests/                   # 单元测试
+├── package.json             # 根脚本：dev / build / start / test
 └── data/                    # SQLite 数据库文件
 ```
 
@@ -105,9 +164,3 @@ exam_system/
 | 统计 | `GET /api/grades/stats/{exam_id}`、`/api/grades/rank/{exam_id}`、`/api/grades/leaderboard/{exam_id}`、`/api/grades/certificates` |
 
 完整接口文档：启动后访问 `http://127.0.0.1:8000/docs`（Swagger UI）。
-
-## 🛠 技术栈
-
-- **后端**: FastAPI / SQLAlchemy 2.0 / Pydantic v2 / python-jose / passlib
-- **数据库**: SQLite
-- **前端**: Jinja2 服务端渲染 + 原生 JS
