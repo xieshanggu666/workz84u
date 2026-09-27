@@ -106,9 +106,9 @@ def calculate_question_stats(db: Session, question_id: int) -> QuestionStatistic
     return stats
 
 
-def get_user_rank(db: Session, user_id: int, exam_id: int) -> dict:
+def compute_user_rank(db: Session, user_id: int, exam_id: int) -> dict:
     """
-    获取用户在某次考试中的名次与百分位。
+    只读计算用户在某次考试中的名次与百分位，不写入成绩记录。
     名次规则：分数高于该用户的已交卷人数 + 1（同分同名次）。
     """
     user_attempt = (
@@ -139,19 +139,42 @@ def get_user_rank(db: Session, user_id: int, exam_id: int) -> dict:
 
     rank = higher + 1
     percentile = round(100 * (1 - higher / total), 1) if total else 0.0
-
-    record = GradeRecord(
-        attempt_id=user_attempt.id,
-        user_id=user_id,
-        exam_id=exam_id,
-        score=user_attempt.score,
-        rank=rank,
-        percentile=percentile,
-    )
-    db.add(record)
-    db.commit()
     return {"user_id": user_id, "exam_id": exam_id, "score": user_attempt.score,
             "rank": rank, "total": total, "percentile": percentile}
+
+
+def get_user_rank(db: Session, user_id: int, exam_id: int) -> dict:
+    """计算名次并保存成绩记录；同一考试记录重复调用时更新而非重复插入"""
+    rank_info = compute_user_rank(db, user_id, exam_id)
+    user_attempt = (
+        db.query(ExamAttempt)
+        .filter(
+            ExamAttempt.exam_id == exam_id,
+            ExamAttempt.user_id == user_id,
+            ExamAttempt.status == "graded",
+        )
+        .first()
+    )
+    record = (
+        db.query(GradeRecord)
+        .filter(GradeRecord.attempt_id == user_attempt.id)
+        .first()
+    )
+    if record:
+        record.score = rank_info["score"]
+        record.rank = rank_info["rank"]
+        record.percentile = rank_info["percentile"]
+    else:
+        db.add(GradeRecord(
+            attempt_id=user_attempt.id,
+            user_id=user_id,
+            exam_id=exam_id,
+            score=rank_info["score"],
+            rank=rank_info["rank"],
+            percentile=rank_info["percentile"],
+        ))
+    db.commit()
+    return rank_info
 
 
 def get_leaderboard(db: Session, exam_id: int, limit: int = 20) -> list[dict]:

@@ -1,6 +1,6 @@
 # 📝 在线考试与题库管理系统
 
-基于 **FastAPI + SQLAlchemy + SQLite** 的在线考试平台，支持题库管理、智能组卷、在线考试、自动评分、成绩统计与证书发放。
+基于 **FastAPI + Vue 3 + TypeScript** 的前后端分离在线考试平台，支持题库管理、智能组卷、在线考试、自动评分、成绩统计与证书发放。
 
 ## ✨ 功能特性
 
@@ -39,22 +39,44 @@
 
 ### 环境要求
 - Python 3.10+
-- 依赖见 `requirements.txt`
+- Node.js 18+
 
-### 安装与启动
+### 安装
 
 ```bash
-# 1. 创建虚拟环境并安装依赖
+# 1. 安装后端依赖
 python -m venv .venv
-.venv\Scripts\activate            # Windows
-# source .venv/bin/activate      # Linux/macOS
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# 2. 初始化数据库（含示例数据：4 用户、1 科目、6 知识点、24 题、1 场已发布考试）
-python scripts/init_db.py
+# 2. 安装前端依赖（frontend/ 与根目录 concurrently）
+npm install && npm run setup
 
-# 3. 启动服务
-uvicorn app.main:app --reload --port 8000
+# 3. 初始化数据库（含示例数据：4 用户、1 科目、6 知识点、24 题、1 场已发布考试）
+python scripts/init_db.py
+```
+
+### 一键启动（前后端同时启动）
+
+```bash
+npm run dev
+```
+
+- 前端（Vite 开发服务器）：http://127.0.0.1:5173 （`/api` 请求自动代理到后端）
+- 后端（FastAPI）：http://127.0.0.1:8000 （接口文档：http://127.0.0.1:8000/docs）
+
+也可以分开启动：
+
+```bash
+npm run dev:backend     # 仅启动后端
+npm run dev:frontend    # 仅启动前端
+```
+
+### 生产模式
+
+```bash
+npm run build           # 构建前端到 frontend/dist
+npm start               # FastAPI 同时托管 API 与前端静态页面
 ```
 
 访问 http://127.0.0.1:8000
@@ -79,18 +101,26 @@ pytest tests/ -v
 
 ```
 exam_system/
-├── app/
-│   ├── main.py              # 入口 + 页面路由
+├── app/                     # FastAPI 后端
+│   ├── main.py              # 入口：API 路由 + 托管前端构建产物
 │   ├── core/                # 配置 / 数据库 / 安全 / 依赖
 │   ├── models/              # SQLAlchemy 模型（10 张表）
 │   ├── schemas/             # Pydantic 校验
 │   ├── services/            # 业务逻辑（组卷 / 评分 / 统计 / 防作弊）
 │   ├── api/                 # REST 接口
 │   └── utils/
-├── templates/               # Jinja2 页面（登录/仪表盘/题库/考试/答题/成绩）
-├── static/                  # CSS / JS
+├── frontend/                # Vue 3 + TypeScript 前端（Vite）
+│   ├── src/
+│   │   ├── api/             # 类型化 API 封装（fetch）
+│   │   ├── stores/          # Pinia 状态（登录态）
+│   │   ├── router/          # Vue Router + 登录守卫
+│   │   ├── views/           # 登录/仪表盘/题库/考试/答题/结果/统计
+│   │   ├── components/      # 弹窗、分页等通用组件
+│   │   └── types/           # 与后端 Schema 对应的 TS 类型
+│   └── vite.config.ts       # /api 代理到 8000 端口
 ├── scripts/init_db.py       # 初始化脚本
 ├── tests/                   # 单元测试
+├── package.json             # npm run dev 一键启动前后端
 └── data/                    # SQLite 数据库文件
 ```
 
@@ -101,7 +131,7 @@ exam_system/
 | 认证 | `POST /api/auth/login` |
 | 题库 | `GET/POST /api/questions`、`/api/questions/subjects`、`/api/questions/knowledge-points`、`/api/questions/tags` |
 | 考试 | `GET/POST /api/exams`、`POST /api/exams/papers/smart-generate` |
-| 答题 | `POST /api/attempts/{exam_id}/start`、`POST /api/attempts/{attempt_id}/submit`、`POST /api/attempts/{attempt_id}/screen-switch` |
+| 答题 | `POST /api/attempts/{exam_id}/start`、`POST /api/attempts/{attempt_id}/submit`、`GET /api/attempts/{attempt_id}/result`、`POST /api/attempts/{attempt_id}/screen-switch` |
 | 统计 | `GET /api/grades/stats/{exam_id}`、`/api/grades/rank/{exam_id}`、`/api/grades/leaderboard/{exam_id}`、`/api/grades/certificates` |
 
 完整接口文档：启动后访问 `http://127.0.0.1:8000/docs`（Swagger UI）。
@@ -109,5 +139,6 @@ exam_system/
 ## 🛠 技术栈
 
 - **后端**: FastAPI / SQLAlchemy 2.0 / Pydantic v2 / python-jose / passlib
+- **前端**: Vue 3 / TypeScript / Vite / Vue Router / Pinia
 - **数据库**: SQLite
-- **前端**: Jinja2 服务端渲染 + 原生 JS
+- **开发工具**: concurrently（一键启动前后端）

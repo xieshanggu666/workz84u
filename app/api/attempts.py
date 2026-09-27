@@ -85,6 +85,41 @@ def submit_exam(attempt_id: int, data: ExamSubmitRequest, db: Session = Depends(
     ))
 
 
+@router.get("/{attempt_id}/result", response_model=APIResponse[ExamResultResponse])
+def get_result(attempt_id: int, db: Session = Depends(get_db),
+               user: User = Depends(get_current_user)):
+    """查询已交卷考试的结果（供结果页刷新后重新加载）"""
+    attempt = attempt_service.get_attempt(db, attempt_id)
+    if not attempt:
+        raise HTTPException(status_code=404, detail="考试记录不存在")
+    if attempt.user_id != user.id and user.role not in ("admin", "teacher"):
+        raise HTTPException(status_code=403, detail="无权查看他人的考试记录")
+    if attempt.status != "graded":
+        raise HTTPException(status_code=400, detail="考试尚未提交")
+
+    exam = db.query(Exam).filter(Exam.id == attempt.exam_id).first()
+    answers = attempt_service.get_attempt_result(db, attempt)
+
+    rank_info = None
+    try:
+        rank_info = grade_service.compute_user_rank(db, attempt.user_id, attempt.exam_id)
+    except ValueError:
+        pass
+
+    from app.schemas.attempt import ExamAnswerResponse
+    return APIResponse(data=ExamResultResponse(
+        attempt_id=attempt.id,
+        exam_id=attempt.exam_id,
+        score=attempt.score,
+        total_score=exam.total_score if exam else 0,
+        is_passed=bool(attempt.is_passed),
+        submit_time=attempt.submit_time,
+        answers=[ExamAnswerResponse.model_validate(a) for a in answers],
+        rank=rank_info["rank"] if rank_info else None,
+        percentile=rank_info["percentile"] if rank_info else None,
+    ))
+
+
 @router.post("/{attempt_id}/screen-switch", response_model=APIResponse[dict])
 def screen_switch(attempt_id: int, db: Session = Depends(get_db),
                   user: User = Depends(get_current_user)):
